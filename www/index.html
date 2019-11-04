@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <!-- <script src="components/loader.js"></script> -->
+    <!-- <link rel="stylesheet" href="components/loader.css"> -->
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' data: gap: https://ssl.gstatic.com 'unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src *; img-src 'self' data: content:;">
+<meta name="format-detection" content="telephone=no">
+<meta name="msapplication-tap-highlight" content="no">
+<meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover">
+<link rel="stylesheet" type="text/css" href="css/index.css"> -->
+    <script>
+        //画像認識APIのURL
+        var apiUrl = "XXX/vision/v2.0/analyze?visualFeatures=Categories,Tags,Description";
+        //画像認識APIのキー
+        var apiKey = "XXX";
+
+        //「写真を撮る」ボタンが押された時の処理
+        function takePhoto() {
+            //Cordovaカメラプラグインの起動
+            navigator.camera.getPicture(function (fileUri) {
+                //画面上の画像(imgタグ)を取得した画像に置き換え
+                $("#photoImg").attr("src", fileUri);
+                //画面上のメッセージ(div)の内容を「認識中...」に変更する
+                $("#tags").text("認識中...");
+                //ComputerVisionに写真をアップロードし、結果を表示する関数を呼び出す
+                uploadPhotoToCloud(fileUri, showResult);
+            }, function (message) {
+                //画像が取得できなかった場合はエラー表示
+                alert(message);
+            }, {
+                //以下はカメラ画像を取得する際のパラメタ
+                quality: 50,
+                targetWidth: 600,
+                targetHeight: 800,
+                destinationType: Camera.DestinationType.FILE_URI,
+                sourceType: Camera.PictureSourceType.CAMERA
+            });			//↑ここの[CAMERA]を[PHOTOLIBRARY]にするとアルバムから選択できます
+        };
+
+        //画像ファイルをアップロードする処理
+        function uploadPhotoToCloud(photoUri, successFunc) {
+            //Uriを実体ファイルパスに変換する
+            window.resolveLocalFileSystemURL(photoUri,
+                //変換が完了した時に呼び出される関数
+                function (fileEntry) {
+                    fileEntry.file(function (file) {
+                        //ファイルを読み込むためのオブジェクトを生成
+                        var reader = new FileReader();
+                        //ファイルの読み込みが完了した時の処理を登録
+                        reader.onloadend = function () {
+                            //読み込んだデータをJPEGファイルとしてBlobにまとめる
+                            var blob = new Blob([new Uint8Array(this.result)], { type: "image/jpeg" });
+
+                            //Web(API)にアクセスするためのオブジェクトを生成
+                            var oReq = new XMLHttpRequest();
+                            oReq.open("POST", apiUrl, true);
+                            //Webへのアクセスが完了した時の処理を登録
+                            oReq.onload = function (oEvent) {
+                                //受信したレスポンス(JSON文字列)をオブジェクトに変換
+                                var obj = JSON.parse(oReq.response);
+                                //第２引数に渡された関数を呼び出す
+                                successFunc(obj);
+                            };
+                            //所定の形式でヘッダを設定
+                            oReq.setRequestHeader('Ocp-Apim-Subscription-Key', apiKey);
+                            oReq.setRequestHeader('Content-Type', 'application/octet-stream');
+                            //Blob(画像データ)を送信する
+                            oReq.send(blob);
+                        };
+                        //ファイルの読み込みを開始する
+                        reader.readAsArrayBuffer(file);
+                    });
+                }
+                , null);
+        }
+
+        //APIを呼び出して得られた結果を表示する処理
+        function showResult(obj) {
+            //結果のうち、タグと確からしさをリスト化
+            var taglist = "";
+            for (var i = 0; i < obj.tags.length; i++) {
+                taglist += obj.tags[i].name + " : " + obj.tags[i].confidence + "<br />";
+            }
+
+            //リスト化したものを#tagsの領域に表示する
+            $("#tags").html(taglist);
+
+            //結果のうち、説明文を取り出して#captionの領域に表示する
+            var caption = obj.description.captions[0].text;
+            $("#caption").text(caption);
+        }
+    </script>
+</head>
+
+<body style="text-align:center; font-size:14pt">
+    <h1>画像認識アプリ</h1>
+    <hr />
+    <button style="font-size:20pt" onclick="takePhoto()">写真を撮る</button><br /><br />
+    <img id="photoImg" width="280"><br />
+    <hr />
+    <div id="tags" style="text-align:left">写真を撮ると認識結果が表示されます</div>
+    <hr />
+    <div id="caption" style="text-align:left"></div>
+</body>
+
+</html>
